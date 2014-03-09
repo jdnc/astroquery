@@ -2,10 +2,10 @@
 from ... import sdss
 from ...utils.testing_tools import MockResponse
 from ...exceptions import TimeoutError
+from ...utils import commons
 from astropy import coordinates
 from astropy.tests.helper import pytest
 from contextlib import contextmanager
-import astropy.utils.data as aud
 import requests
 import os
 import socket
@@ -42,9 +42,9 @@ def patch_get_readable_fileobj(request):
     @contextmanager
     def get_readable_fileobj_mockreturn(filename, **kwargs):
         file_obj = data_path(DATA_FILES['spectra'])  # TODO: add images option
-        yield open(file_obj)
+        yield open(file_obj,'rb')
     mp = request.getfuncargvalue("monkeypatch")
-    mp.setattr(aud, 'get_readable_fileobj', get_readable_fileobj_mockreturn)
+    mp.setattr(commons, 'get_readable_fileobj', get_readable_fileobj_mockreturn)
     return mp
 
 
@@ -57,7 +57,7 @@ def patch_get_readable_fileobj_slow(request):
         raise e
         yield True
     mp = request.getfuncargvalue("monkeypatch")
-    mp.setattr(aud, 'get_readable_fileobj', get_readable_fileobj_mockreturn)
+    mp.setattr(commons, 'get_readable_fileobj', get_readable_fileobj_mockreturn)
     return mp
 
 
@@ -66,7 +66,7 @@ def get_mockreturn(url, params=None, timeout=10, **kwargs):
         filename = data_path(DATA_FILES['spectra_id'])
     else:
         filename = data_path(DATA_FILES['images_id'])
-    content = open(filename, 'r').read()
+    content = open(filename, 'rb').read()
     return MockResponse(content, **kwargs)
 
 

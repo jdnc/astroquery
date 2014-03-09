@@ -39,8 +39,8 @@ def validate_epoch(func):
                 p = re.compile('^[JB]\d+[.]?\d+$', re.IGNORECASE)
                 assert p.match(value) is not None
             except (AssertionError, TypeError):
-                raise Exception("Epoch must be specified as [J|B]<epoch>.\n"
-                                "Example: epoch='J2000'")
+                raise ValueError("Epoch must be specified as [J|B]<epoch>.\n"
+                                 "Example: epoch='J2000'")
         return func(*args, **kwargs)
     return wrapper
 
@@ -56,7 +56,7 @@ def validate_equinox(func):
             try:
                 float(value)
             except ValueError:
-                raise Exception("Equinox must be a number")
+                raise ValueError("Equinox must be a number")
         return func(*args, **kwargs)
     return wrapper
     
@@ -97,6 +97,7 @@ class SimbadClass(BaseQuery):
                 '[^0-9]': 'Any (one) character not in the list.'
 
                 }
+    _ORDERED_WILDCARDS = ['*','?','[abc]','[^0-9]']
 
     # query around not included since this is a subcase of query_region
     _function_to_command = {
@@ -135,7 +136,7 @@ class SimbadClass(BaseQuery):
 
         [abc] : Exactly one character taken in the list. Can also be defined by a range of characters: [A-Z]
         """
-        for key in self.WILDCARDS:
+        for key in self._ORDERED_WILDCARDS:
             print("{key} : {value}\n".format(key=key, value=self.WILDCARDS[key]))
         return
 
@@ -193,7 +194,7 @@ class SimbadClass(BaseQuery):
         try:
             print (fields_dict[field_name])
         except KeyError:
-            raise Exception("No such field_name")
+            raise KeyError("No such field_name")
 
     def get_votable_fields(self):
         """
@@ -259,7 +260,7 @@ class SimbadClass(BaseQuery):
             sfields = self._VOTABLE_FIELDS
         absent_fields = set(sargs) - set(sfields)
 
-        for b,f in zip(sfields, self._VOTABLE_FIELDS):
+        for b,f in list(zip(sfields, self._VOTABLE_FIELDS)):
             if b in sargs:
                 self._VOTABLE_FIELDS.remove(f)
 
@@ -597,7 +598,7 @@ class SimbadClass(BaseQuery):
         request_payload = self._args_to_payload(bibcode, wildcard=wildcard,
                                                 caller='query_bibcode_async', get_raw=True)
         response = commons.send_request(self.SIMBAD_URL, request_payload,
-                                self.TIMEOUT)
+                                        self.TIMEOUT)
         return response
 
     @validate_epoch
@@ -687,7 +688,7 @@ def _parse_coordinates(coordinates):
         # get ra, dec and frame
         return _get_frame_coords(c)
     except (u.UnitsException, TypeError):
-        raise Exception("Coordinates not specified correctly")
+        raise ValueError("Coordinates not specified correctly")
 
 
 def _get_frame_coords(c):
@@ -710,6 +711,8 @@ def _get_frame_coords(c):
 
 
 def _to_simbad_format(ra, dec):
+    # This irrelevantly raises the exception 
+    # "AttributeError: Angle instance has no attribute 'hour'"
     ra = ra.format(u.hour, sep=':')
     dec = dec.format(u.degree, sep=':', alwayssign='True')
     return (ra.lstrip(), dec.lstrip())
@@ -730,7 +733,7 @@ def _parse_radius(radius):
         if unit == 's':
             return str(abs(angle.dms[2])) + unit
     except (u.UnitsException, coord.errors.UnitsError, AttributeError):
-        raise Exception("Radius specified incorrectly")
+        raise ValueError("Radius specified incorrectly")
 
 error_regex = re.compile(r'(?ms)\[(?P<line>\d+)\]\s?(?P<msg>.+?)(\[|\Z)')
 bibcode_regex = re.compile(r'query\s+bibcode\s+(wildcard)?\s+([\w]*)')
@@ -845,5 +848,8 @@ def _create_bibcode_table(data, splitter):
     max_len = max([len(r) for r in ref_list])
     table = Table(names=['References'], dtypes=['S%i' % max_len])
     for ref in ref_list:
-        table.add_row([ref.decode('utf-8')])
+        if hasattr(ref,'decode'):
+            table.add_row([ref.decode('utf-8')])
+        else:
+            table.add_row([ref])
     return table
